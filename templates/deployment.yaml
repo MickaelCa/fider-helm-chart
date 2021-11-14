@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fider-helm-chart.fullname" . }}
+  labels:
+    {{- include "fider-helm-chart.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fider-helm-chart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "fider-helm-chart.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: HOST_DOMAIN
+              value: {{ required "No fider host domain provided" .Values.fider.hostDomain }}
+            - name: EMAIL_NOREPLY
+              value: {{ required "No noreply email provided" .Values.fider.emailNoreply }}
+            {{- if eq .Values.fider.email.service "mailgun" }}
+            - name: EMAIL_MAILGUN_DOMAIN
+              value: {{ required "No mailgun domain provided" .Values.fider.email.mailgun.domain }}
+            {{- else if eq .Values.fider.email.service "smtp" }}
+            - name: EMAIL_SMTP_HOST
+              value: {{ required "No SMTP host provided" .Values.fider.email.smtp.host }}
+            - name: EMAIL_SMTP_PORT
+              value: {{ required "No SMTP port provided" .Values.fider.email.smtp.port | quote }}
+            - name: EMAIL_SMTP_ENABLE_STARTTLS
+              value: {{ .Values.fider.email.smtp.enableStarttls | default "false" | quote }}
+            {{- end }}
+          {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ include "fider-helm-chart.fullname" . }}
+          {{- with .Values.envFrom }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
